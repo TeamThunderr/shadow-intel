@@ -1,5 +1,5 @@
 import networkx as nx
-from shared.logger import get_logger
+from backend.shared.logger import get_logger
 
 logger = get_logger(__name__)
 

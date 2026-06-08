@@ -1,5 +1,5 @@
 import httpx
-from shared.logger import get_logger
+from backend.shared.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -23,10 +23,13 @@ async def close_client():
         await _client.aclose()
 
 
-async def get_json(url: str, params: dict = None, headers: dict = None) -> dict | None:
+async def get_json(url: str, params: dict = None, headers: dict = None, timeout: float = None) -> dict | None:
     client = await get_client()
     try:
-        resp = await client.get(url, params=params, headers=headers)
+        kwargs = {}
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        resp = await client.get(url, params=params, headers=headers, **kwargs)
         resp.raise_for_status()
         return resp.json()
     except httpx.HTTPStatusError as e:
