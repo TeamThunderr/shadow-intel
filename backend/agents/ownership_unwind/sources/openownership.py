@@ -11,8 +11,8 @@ Documentation: https://docs.openownership.org/register/
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import asyncio
-from backend.shared.http_client import get_json
-from backend.shared.logger import get_logger
+from shared.http_client import get_json
+from shared.logger import get_logger
 
 logger = get_logger(__name__)
 

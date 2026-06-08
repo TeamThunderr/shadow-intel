@@ -12,8 +12,8 @@ from typing import Optional, List, Dict, Any
 import asyncio
 import re
 import html
-from backend.shared.http_client import get_json, get_client
-from backend.shared.logger import get_logger
+from shared.http_client import get_json, get_client
+from shared.logger import get_logger
 
 logger = get_logger(__name__)
 

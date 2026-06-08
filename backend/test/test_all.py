@@ -1,5 +1,5 @@
 import asyncio
-from backend.fabric.pipeline import run_all_ingestion
+from fabric.pipeline import run_all_ingestion
 
 result = asyncio.run(run_all_ingestion())
 for d in result["datasets"]:

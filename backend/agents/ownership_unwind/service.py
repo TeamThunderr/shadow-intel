@@ -12,11 +12,11 @@ from typing import Optional, List, Dict, Any
 import time
 import asyncio
 from datetime import datetime
-from backend.shared.schemas import (
+from shared.schemas import (
     AgentResponse, EntityFingerprint, AgentStatus, EvidenceItem
 )
-from backend.shared.logger import get_logger
-from backend.agents.base import BaseAgent
+from shared.logger import get_logger
+from agents.base import BaseAgent
 from .graph_builder import (
     OwnershipGraphBuilder, OwnershipEntity, OwnershipLink,
     EntityType, create_mock_ownership_graph

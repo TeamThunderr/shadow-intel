@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from backend.shared.schemas import AgentResponse, EntityFingerprint, AgentStatus
-from backend.shared.logger import get_logger
+from shared.schemas import AgentResponse, EntityFingerprint, AgentStatus
+from shared.logger import get_logger
 import time
 
 

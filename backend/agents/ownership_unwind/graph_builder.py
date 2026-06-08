@@ -10,8 +10,8 @@ from typing import Optional, Dict, List, Set, Any
 from enum import Enum
 import uuid
 import networkx as nx
-from backend.shared.logger import get_logger
-from backend.shared.schemas import EvidenceItem
+from shared.logger import get_logger
+from shared.schemas import EvidenceItem
 
 logger = get_logger(__name__)
 

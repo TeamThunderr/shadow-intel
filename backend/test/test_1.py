@@ -2,7 +2,7 @@ import asyncio
 from dotenv import load_dotenv
 load_dotenv()
 
-from backend.agents.money_trail import run_money_trail
+from agents.money_trail import run_money_trail
 
 fingerprint = {
     "entity_id": "test-uuid-001",

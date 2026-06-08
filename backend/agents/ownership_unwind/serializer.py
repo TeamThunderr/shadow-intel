@@ -8,7 +8,7 @@ Handles node positioning, link metadata, and color coding.
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import networkx as nx
-from backend.shared.logger import get_logger
+from shared.logger import get_logger
 
 logger = get_logger(__name__)
 

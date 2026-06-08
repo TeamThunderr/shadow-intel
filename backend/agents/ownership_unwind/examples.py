@@ -31,7 +31,7 @@ from .service import (
 )
 
 try:
-    from backend.shared.schemas import EntityFingerprint, EntityType as SchemaEntityType
+    from shared.schemas import EntityFingerprint, EntityType as SchemaEntityType
 except ImportError:
     # Fallback for running from examples
     from pydantic import BaseModel, Field

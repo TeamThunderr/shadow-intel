@@ -22,13 +22,13 @@ from typing import List, Dict, Any
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from backend.agents.ownership_unwind.sources import (
+from agents.ownership_unwind.sources import (
     companies_house,
     sec_edgar,
     openownership,
 )
-from backend.agents.ownership_unwind.service import OwnershipAnalysisService
-from backend.shared.logger import get_logger
+from agents.ownership_unwind.service import OwnershipAnalysisService
+from shared.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -297,7 +297,7 @@ async def example_build_graph_real_data():
     print("EXAMPLE 5: Build & Analyze Real Ownership Graph")
     print("=" * 70)
     
-    from backend.agents.ownership_unwind.service import OwnershipAnalysisService
+    from agents.ownership_unwind.service import OwnershipAnalysisService
     
     service = OwnershipAnalysisService()
     

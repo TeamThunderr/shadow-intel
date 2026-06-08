@@ -1,4 +1,4 @@
-from backend.agents.money_trail import (
+from agents.money_trail import (
     detect_laundering_patterns,
     build_financial_flows,
     calculate_financial_risk_score

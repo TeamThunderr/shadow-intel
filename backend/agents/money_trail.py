@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import httpx
 from dateutil import parser as dateutil_parser
 
-from backend.fabric.pipeline import (
+from fabric.pipeline import (
     query_fatf_risk,
     query_gleif_by_name,
     query_sanctions_by_name,

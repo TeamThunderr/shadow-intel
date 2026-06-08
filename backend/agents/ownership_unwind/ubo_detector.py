@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Set, Dict
 from enum import Enum
 import networkx as nx
-from backend.shared.logger import get_logger
+from shared.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -1,4 +1,4 @@
-from backend.agents.money_trail import detect_laundering_patterns
+from agents.money_trail import detect_laundering_patterns
 
 mock_hops = [
   {"hop": 1, "amount_usd": 75000, "date": "2024-01-01T00:00:00+00:00",

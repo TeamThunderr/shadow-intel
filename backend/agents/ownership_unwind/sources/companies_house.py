@@ -12,9 +12,9 @@ Documentation: https://developer.company-information.service.gov.uk/
 from typing import Optional, List, Dict, Any
 import base64
 import asyncio
-from backend.shared.http_client import get_json
-from backend.shared.logger import get_logger
-from backend.shared.config import get_settings
+from shared.http_client import get_json
+from shared.logger import get_logger
+from shared.config import get_settings
 
 logger = get_logger(__name__)
 
