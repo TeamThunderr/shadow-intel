@@ -20,7 +20,8 @@ export default function Investigation() {
   const { data: status } = useQuery({
     queryKey: ['status', entityId],
     queryFn: () => getInvestigationStatus(entityId).then(r => r.data),
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
+      const data = query.state.data
       if (!data || data?.overall_status === 'running') return 2000
       return false
     },
@@ -34,6 +35,7 @@ export default function Investigation() {
   })
 
   const isRunning = !status || status?.overall_status === 'running'
+  const isFailed = status?.overall_status === 'failed'
   const riskColor = report ? RISK_COLORS[report.risk_level] : '#3b82f6'
 
   return (
@@ -70,6 +72,14 @@ export default function Investigation() {
           <div className="progress-bar" style={{ marginTop: '1.5rem', maxWidth: 300, margin: '1.5rem auto 0' }}>
             <div className="progress-bar-fill" style={{ width: '60%', animation: 'none' }} />
           </div>
+        </div>
+      )}
+
+      {isFailed && (
+        <div className="glass-card" style={{ padding: '3rem', textAlign: 'center', marginTop: '2rem', border: '1px solid #ef4444' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>❌</div>
+          <div style={{ fontWeight: 600, color: '#ef4444', marginBottom: '0.5rem' }}>Investigation Failed</div>
+          <div style={{ fontSize: '0.85rem', color: '#475569' }}>An error occurred while running the agents. Please check the backend logs.</div>
         </div>
       )}
 

@@ -1,5 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from shared.logger import get_logger
+from agents.resurface.store import WatchlistStore
+from agents.resurface.agent import ResurfaceAlertEngine
 
 logger = get_logger(__name__)
 
@@ -37,5 +39,20 @@ async def poll_all_watchlist_entries():
     """
     Runs on schedule. Iterates all watchlist entries and checks for resurface events.
     """
-    # TODO (P4): import watchlist store, iterate entries, run ResurfaceAlertEngine
     logger.info("Running scheduled watchlist poll...")
+    store = WatchlistStore()
+    entries = await store.list_entities()
+    
+    if not entries:
+        logger.info("Watchlist is empty. Skipping poll.")
+        return
+        
+    engine = ResurfaceAlertEngine()
+    
+    for entry in entries:
+        try:
+            logger.info(f"Polling resurface events for {entry.entity_name}...")
+            await engine.run(entry.fingerprint, entry.confidence_threshold)
+            await store.update_last_checked(entry.entity_id)
+        except Exception as e:
+            logger.error(f"Failed to poll for {entry.entity_name}: {e}")
