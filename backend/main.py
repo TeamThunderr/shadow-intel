@@ -13,6 +13,10 @@ logger = get_logger("main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Shadow Intel backend starting up")
+    from shared.config import get_settings
+    settings = get_settings()
+    has_occrp_key = "YES" if settings.occrp_api_key else "NO"
+    logger.info(f"OCCRP API key detected: {has_occrp_key}")
     yield
     await close_client()
     logger.info("Shadow Intel backend shut down")

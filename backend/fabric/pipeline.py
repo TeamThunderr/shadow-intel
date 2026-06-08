@@ -22,7 +22,7 @@ from utils.fatf_parser import parse_fatf_jurisdictions
 logger = logging.getLogger(__name__)
 
 # Local fallback directory — used when Fabric is unavailable
-LOCAL_DATA_DIR = Path("backend/data")
+LOCAL_DATA_DIR = Path(__file__).parent.parent / "data"
 LOCAL_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Freshness tracker — in-memory dict updated after each ingestion
@@ -107,9 +107,12 @@ def save_local(table_name: str, df: pd.DataFrame) -> None:
     except Exception as e:
         logger.error(f"Failed to save {table_name} locally: {e}")
 
+from functools import lru_cache
+
+@lru_cache(maxsize=16)
 def load_local(table_name: str) -> pd.DataFrame | None:
     """
-    Load a local Parquet file.
+    Load a local Parquet file. Cached using lru_cache.
     """
     try:
         path = LOCAL_DATA_DIR / f"{table_name}.parquet"
@@ -119,6 +122,31 @@ def load_local(table_name: str) -> pd.DataFrame | None:
     except Exception as e:
         logger.error(f"Failed to load {table_name} locally: {e}")
         return None
+
+
+def normalize_entity_name(name: str) -> str:
+    """
+    Normalize entity names by removing common corporate suffixes, punctuation,
+    and converting to uppercase to improve fuzzy matching accuracy.
+    """
+    if not name:
+        return ""
+    import re
+    # Convert to uppercase
+    n = name.upper()
+    # Replace special characters and extra punctuation with space
+    n = re.sub(r'[\.,;\(\)\-\[\]\{\}]', ' ', n)
+    # Tokenize and filter out common corporate suffixes
+    suffixes = {
+        "INC", "INCORPORATED", "PLC", "CO", "COMPANY", "CORP", "CORPORATION",
+        "LTD", "LIMITED", "GROUP", "HOLDINGS", "LLC", "LLP", "MOTORS", "SA", "AG", "B V", "N V"
+    }
+    words = n.split()
+    cleaned_words = [w for w in words if w not in suffixes]
+    # Reassemble
+    result = " ".join(cleaned_words)
+    return result.strip()
+
 
 async def ingest_fatf_jurisdictions() -> dict:
     """
@@ -654,20 +682,32 @@ async def query_fatf_risk(country: str) -> dict:
         
     return {"country": country, "risk_level": "clean", "risk_score": 0.0}
 
-async def query_icij_by_name(name: str) -> list[dict]:
+async def query_icij_by_name(name: str, threshold: float = 70.0) -> list[dict]:
     matches = []
+    
+    query_normalized = normalize_entity_name(name)
+    if not query_normalized:
+        return []
     
     df_entities = load_local("icij_entities")
     if df_entities is not None:
         for _, row in df_entities.iterrows():
             row_name = str(row.get('name', ''))
-            score = fuzz.token_sort_ratio(name.lower(), row_name.lower())
-            if score >= 75:
+            row_normalized = normalize_entity_name(row_name)
+            if not row_normalized:
+                continue
+            
+            token_sort_ratio = fuzz.token_sort_ratio(query_normalized, row_normalized)
+            token_set_ratio = fuzz.token_set_ratio(query_normalized, row_normalized)
+            partial_ratio = fuzz.partial_ratio(query_normalized, row_normalized)
+            
+            confidence = 0.5 * token_sort_ratio + 0.3 * token_set_ratio + 0.2 * partial_ratio
+            if confidence >= threshold:
                 matches.append({
                     "source": "icij_entities",
                     "node_id": str(row.get('node_id', '')),
                     "name": row_name,
-                    "match_score": score / 100.0,
+                    "match_score": confidence / 100.0,
                     "jurisdiction": str(row.get('jurisdiction', '')),
                     "countries": str(row.get('countries', '')),
                     "dataset": str(row.get('sourceID', ''))
@@ -677,13 +717,21 @@ async def query_icij_by_name(name: str) -> list[dict]:
     if df_officers is not None:
         for _, row in df_officers.iterrows():
             row_name = str(row.get('name', ''))
-            score = fuzz.token_sort_ratio(name.lower(), row_name.lower())
-            if score >= 75:
+            row_normalized = normalize_entity_name(row_name)
+            if not row_normalized:
+                continue
+            
+            token_sort_ratio = fuzz.token_sort_ratio(query_normalized, row_normalized)
+            token_set_ratio = fuzz.token_set_ratio(query_normalized, row_normalized)
+            partial_ratio = fuzz.partial_ratio(query_normalized, row_normalized)
+            
+            confidence = 0.5 * token_sort_ratio + 0.3 * token_set_ratio + 0.2 * partial_ratio
+            if confidence >= threshold:
                 matches.append({
                     "source": "icij_officers",
                     "node_id": str(row.get('node_id', '')),
                     "name": row_name,
-                    "match_score": score / 100.0,
+                    "match_score": confidence / 100.0,
                     "jurisdiction": "",
                     "countries": str(row.get('countries', '')),
                     "dataset": str(row.get('sourceID', ''))
