@@ -13,3 +13,7 @@ apscheduler==3.10.4
 azure-ai-inference==1.0.0b3
 msgraph-sdk==1.4.0
 azure-identity==1.17.0
+pyarrow
+lxml
+beautifulsoup4
+pycountry
