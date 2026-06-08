@@ -21,7 +21,7 @@ from shared.logger import get_logger
 
 from agents.ghost_tracker.agent import GhostEntityTracker
 from agents.ghost_tracker.fingerprint import build_fingerprint
-from agents.money_trail.agent import MoneyTrailAgent
+from agents.money_trail import run_money_trail
 from agents.ownership_unwind.agent import OwnershipUnwindAgent
 from agents.dark_signal.agent import DarkSignalMonitor
 from agents.resurface.agent import ResurfaceAlertEngine
@@ -187,8 +187,14 @@ async def _run_investigation(entity_id: str) -> None:
         status.agents.dark_signal      = AgentStatus.running
         status.agents.resurface_engine = AgentStatus.running
 
+        # Wrapper to return AgentResponse from dict
+        async def _run_money_trail_wrapped(fp):
+            res_dict = await run_money_trail(fp.model_dump() if hasattr(fp, "model_dump") else fp.dict())
+            from shared.schemas import AgentResponse
+            return AgentResponse(**res_dict)
+
         money_r, ownership_r, signal_r, resurface_r = await asyncio.gather(
-            MoneyTrailAgent().execute(fingerprint),
+            _run_money_trail_wrapped(fingerprint),
             OwnershipUnwindAgent().execute(fingerprint),
             DarkSignalMonitor().execute(fingerprint),
             ResurfaceAlertEngine().execute(fingerprint),
