@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     graph_tenant_id: str = ""
     graph_teams_channel_id: str = ""
     graph_teams_team_id: str = ""
+    graph_sender_email: str = ""
 
     # External APIs
     opensanctions_api_key: str = ""
