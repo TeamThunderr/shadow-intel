@@ -1,7 +1,7 @@
 import uuid
 import time
 from functools import wraps
-from shared.logger import get_logger
+from backend.shared.logger import get_logger
 
 logger = get_logger(__name__)
 
