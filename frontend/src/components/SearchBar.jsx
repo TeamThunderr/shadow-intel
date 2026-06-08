@@ -10,11 +10,17 @@ export default function SearchBar({ onInvestigate, loading = false }) {
   const [name, setName] = useState('')
   const [entityType, setEntityType] = useState('unknown')
   const [countryHint, setCountryHint] = useState('')
+  const [confidenceThreshold, setConfidenceThreshold] = useState(80)
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!name.trim() || loading) return
-    onInvestigate({ name: name.trim(), entityType, countryHint: countryHint.trim().toUpperCase().slice(0, 2) || null })
+    onInvestigate({ 
+      name: name.trim(), 
+      entityType, 
+      countryHint: countryHint.trim().toUpperCase().slice(0, 2) || null,
+      confidenceThreshold: confidenceThreshold / 100
+    })
   }
 
   return (
@@ -90,6 +96,21 @@ export default function SearchBar({ onInvestigate, loading = false }) {
         <span style={{ fontSize: '0.75rem', color: '#475569' }}>
           ISO 2-letter country code (optional)
         </span>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: '1rem' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Confidence Threshold:</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={confidenceThreshold}
+            onChange={(e) => setConfidenceThreshold(parseInt(e.target.value, 10))}
+            style={{ width: 80, accentColor: '#3b82f6' }}
+          />
+          <span style={{ fontSize: '0.75rem', color: '#60a5fa', fontWeight: 600, minWidth: '32px' }}>
+            {confidenceThreshold}%
+          </span>
+        </div>
       </div>
 
       <style>{`
