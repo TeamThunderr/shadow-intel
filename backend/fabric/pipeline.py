@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 from azure.identity import ClientSecretCredential
 
-from backend.utils.fatf_parser import parse_fatf_jurisdictions
+from utils.fatf_parser import parse_fatf_jurisdictions
 
 logger = logging.getLogger(__name__)
 
