@@ -14,7 +14,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const handleInvestigate = async ({ name, entityType, countryHint }) => {
+  const handleInvestigate = async ({ name, entityType, countryHint, confidenceThreshold = 0.8 }) => {
     setLoading(true)
     setError(null)
     try {
@@ -22,6 +22,7 @@ export default function Home() {
         name,
         entity_type: entityType,
         country_hint: countryHint || null,
+        confidence_threshold: confidenceThreshold,
       })
       navigate(`/investigate/${res.data.entity_id}`)
     } catch (err) {

@@ -1,17 +1,25 @@
+"""
+Ghost Entity Tracker — Main Agent
+Runs all sanctions sources, enriches the entity fingerprint,
+and returns a scored AgentResponse.
+"""
+
+import asyncio
 from agents.base import BaseAgent
-from shared.schemas import AgentResponse, EntityFingerprint, EvidenceItem, AgentStatus
-from shared.utils import generate_entity_id
+from shared.schemas import AgentResponse, EntityFingerprint, EvidenceItem
 from shared.config import get_settings
-from .fingerprint import build_fingerprint
-from .sources.opensanctions import query_opensanctions
+from .fingerprint import enrich_fingerprint
 from .sources.ofac import query_ofac
+from .sources.un_sanctions import query_un_sanctions
+from .sources.opensanctions import query_opensanctions
 from .sources.opencorporates import query_opencorporates
 
 
 class GhostEntityTracker(BaseAgent):
     """
-    Entry point agent. Detects sanctions matches, builds entity fingerprint,
-    and passes it to all subsequent agents.
+    Entry point agent. Queries all public sanctions lists,
+    detects aliases and resurrection patterns, builds the entity fingerprint
+    that all subsequent agents use as input.
     """
 
     @property
@@ -20,72 +28,131 @@ class GhostEntityTracker(BaseAgent):
 
     async def run(self, fingerprint: EntityFingerprint) -> AgentResponse:
         settings = get_settings()
+        name = fingerprint.canonical_name
+        self.logger.info(f"Investigating: '{name}'")
+
+        # ── Run all sources concurrently ──────────────────────────────────
+        ofac_results, un_results, os_results, corp_results = await asyncio.gather(
+            query_ofac(name),
+            query_un_sanctions(name),
+            query_opensanctions(name, settings),
+            query_opencorporates(name, settings),
+            return_exceptions=True,  # don't crash if one source fails
+        )
+
+        # Normalise — replace exceptions with empty lists
+        ofac_results = ofac_results if isinstance(ofac_results, list) else []
+        un_results = un_results if isinstance(un_results, list) else []
+        os_results = os_results if isinstance(os_results, list) else []
+        corp_results = corp_results if isinstance(corp_results, list) else []
+
+        # ── Build evidence items ──────────────────────────────────────────
         evidence: list[EvidenceItem] = []
-        aliases: list[str] = []
-        jurisdictions: list[str] = []
-        sanctions_lists: list[str] = []
 
-        # 1. Query OpenSanctions
-        os_results = await query_opensanctions(fingerprint.canonical_name, settings)
-        if os_results:
-            for match in os_results:
-                aliases.extend(match.get("aliases", []))
-                jurisdictions.extend(match.get("jurisdictions", []))
-                sanctions_lists.append(match.get("source", "opensanctions"))
-                evidence.append(EvidenceItem(
-                    source="OpenSanctions",
-                    type="sanctions_match",
-                    detail=f"Matched: {match.get('name')} | Score: {match.get('score', 0):.2f}",
-                    url=match.get("url"),
-                    confidence=match.get("score", 0.0),
-                ))
+        # OFAC evidence
+        for r in ofac_results:
+            evidence.append(EvidenceItem(
+                source="OFAC SDN",
+                type="sanctions_match",
+                detail=(
+                    f"OFAC match: '{r['name']}' "
+                    f"(matched via '{r['matched_name']}') "
+                    f"| Programs: {', '.join(r.get('programs', [])[:3])}"
+                ),
+                confidence=r["confidence"],
+            ))
 
-        # 2. Query OFAC SDN list
-        ofac_results = await query_ofac(fingerprint.canonical_name)
-        if ofac_results:
-            for match in ofac_results:
-                sanctions_lists.append("OFAC")
-                evidence.append(EvidenceItem(
-                    source="OFAC SDN",
-                    type="sanctions_match",
-                    detail=f"OFAC match: {match.get('name')}",
-                    confidence=match.get("confidence", 0.8),
-                ))
+        # UN evidence
+        for r in un_results:
+            evidence.append(EvidenceItem(
+                source="UN Security Council",
+                type="sanctions_match",
+                detail=(
+                    f"UN Consolidated match: '{r['name']}' "
+                    f"[{r.get('type', 'unknown')}] "
+                    f"(matched via '{r['matched_name']}')"
+                ),
+                confidence=r["confidence"],
+            ))
 
-        # 3. Query OpenCorporates for director overlaps
-        corp_results = await query_opencorporates(fingerprint.canonical_name, settings)
-        if corp_results:
-            for corp in corp_results:
-                jurisdictions.append(corp.get("jurisdiction", ""))
-                evidence.append(EvidenceItem(
-                    source="OpenCorporates",
-                    type="corporate_match",
-                    detail=f"Similar entity: {corp.get('name')} in {corp.get('jurisdiction')}",
-                    url=corp.get("url"),
-                    confidence=corp.get("similarity", 0.7),
-                ))
+        # OpenSanctions evidence
+        for r in os_results:
+            datasets = r.get("datasets", [])[:2]
+            evidence.append(EvidenceItem(
+                source="OpenSanctions",
+                type="sanctions_match",
+                detail=(
+                    f"OpenSanctions match: '{r['name']}' "
+                    f"| Score: {r['score']:.0%} "
+                    f"| Lists: {', '.join(datasets)}"
+                ),
+                url=r.get("url"),
+                confidence=r["confidence"],
+            ))
 
-        # 4. Build updated fingerprint
-        fingerprint.aliases = list(set(aliases))
-        fingerprint.jurisdictions = list(set(j for j in jurisdictions if j))
-        fingerprint.sanctions_lists = list(set(sanctions_lists))
+        # OpenCorporates evidence (director overlaps / opacity jurisdictions)
+        for r in corp_results:
+            detail = (
+                f"Corporate match: '{r['name']}' in {r['jurisdiction']} "
+                f"| Status: {r.get('status', 'unknown')}"
+            )
+            if r.get("opacity_jurisdiction"):
+                detail += " ⚠️ HIGH-RISK JURISDICTION"
 
-        # 5. Calculate confidence score
-        confidence = min(1.0, (
-            (0.4 if sanctions_lists else 0.0) +
-            (0.3 * min(len(evidence) / 5, 1.0)) +
-            (0.3 * min(len(jurisdictions) / 3, 1.0))
+            evidence.append(EvidenceItem(
+                source="OpenCorporates",
+                type="corporate_match",
+                detail=detail,
+                url=r.get("url"),
+                confidence=r["similarity"],
+            ))
+
+        # ── Enrich fingerprint with discovered data ───────────────────────
+        enriched = enrich_fingerprint(
+            fingerprint, ofac_results, un_results, os_results, corp_results
+        )
+
+        # ── Calculate risk score ──────────────────────────────────────────
+        sanctions_hit = bool(ofac_results or un_results or os_results)
+        top_confidence = max((e.confidence for e in evidence), default=0.0)
+        alias_score = min(len(enriched.aliases) / 10, 1.0)
+        jurisdiction_score = min(len(enriched.jurisdictions) / 5, 1.0)
+
+        risk_score = min(1.0, (
+            (0.50 * top_confidence) +
+            (0.25 * (1.0 if sanctions_hit else 0.0)) +
+            (0.15 * alias_score) +
+            (0.10 * jurisdiction_score)
         ))
+
+        # Sort evidence by confidence descending
+        evidence.sort(key=lambda e: e.confidence, reverse=True)
+
+        self.logger.info(
+            f"Ghost Tracker complete | "
+            f"evidence={len(evidence)} | "
+            f"risk={risk_score:.2f} | "
+            f"sanctions_hit={sanctions_hit} | "
+            f"aliases={len(enriched.aliases)} | "
+            f"jurisdictions={len(enriched.jurisdictions)}"
+        )
 
         return AgentResponse(
             module=self.module_name,
             entity_id=fingerprint.entity_id,
-            risk_score=confidence,
+            risk_score=round(risk_score, 3),
             evidence=evidence,
             data={
-                "fingerprint": fingerprint.model_dump(),
-                "sanctions_lists": fingerprint.sanctions_lists,
-                "alias_count": len(fingerprint.aliases),
-                "jurisdiction_count": len(fingerprint.jurisdictions),
-            }
+                "fingerprint": enriched.model_dump(),
+                "sanctions_hit": sanctions_hit,
+                "sanctions_lists": enriched.sanctions_lists,
+                "alias_count": len(enriched.aliases),
+                "jurisdiction_count": len(enriched.jurisdictions),
+                "source_breakdown": {
+                    "ofac": len(ofac_results),
+                    "un": len(un_results),
+                    "opensanctions": len(os_results),
+                    "opencorporates": len(corp_results),
+                },
+            },
         )
