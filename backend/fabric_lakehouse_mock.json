@@ -1,0 +1,76 @@
+{
+  "watchlist": [
+    {
+      "entity_id": "4469d28e-c012-473c-afe7-c542568386b6",
+      "entity_name": "Test Entity",
+      "fingerprint": {
+        "entity_id": "4469d28e-c012-473c-afe7-c542568386b6",
+        "canonical_name": "Test Entity",
+        "aliases": [],
+        "jurisdictions": [],
+        "directors": [],
+        "addresses": [],
+        "registration_numbers": [],
+        "sanctions_lists": []
+      },
+      "confidence_threshold": 0.8,
+      "added_at": "2026-06-08T11:49:59.467005",
+      "last_checked": null,
+      "last_alert": null
+    },
+    {
+      "entity_id": "574be521-de4d-463b-86b8-2d2690078017",
+      "entity_name": "viktour bout",
+      "fingerprint": {
+        "entity_id": "574be521-de4d-463b-86b8-2d2690078017",
+        "canonical_name": "viktour bout",
+        "aliases": [],
+        "jurisdictions": [],
+        "directors": [],
+        "addresses": [],
+        "registration_numbers": [],
+        "sanctions_lists": []
+      },
+      "confidence_threshold": 0.8,
+      "added_at": "2026-06-08T12:19:43.670542",
+      "last_checked": null,
+      "last_alert": null
+    },
+    {
+      "entity_id": "d8046502-be9b-4416-8593-daf5d5c257f7",
+      "entity_name": "hello",
+      "fingerprint": {
+        "entity_id": "d8046502-be9b-4416-8593-daf5d5c257f7",
+        "canonical_name": "hello",
+        "aliases": [],
+        "jurisdictions": [],
+        "directors": [],
+        "addresses": [],
+        "registration_numbers": [],
+        "sanctions_lists": []
+      },
+      "confidence_threshold": 0.8,
+      "added_at": "2026-06-08T12:38:12.405703",
+      "last_checked": null,
+      "last_alert": null
+    },
+    {
+      "entity_id": "1ae1b798-f663-419d-944b-a3fd948e8c37",
+      "entity_name": "test",
+      "fingerprint": {
+        "entity_id": "1ae1b798-f663-419d-944b-a3fd948e8c37",
+        "canonical_name": "test",
+        "aliases": [],
+        "jurisdictions": [],
+        "directors": [],
+        "addresses": [],
+        "registration_numbers": [],
+        "sanctions_lists": []
+      },
+      "confidence_threshold": 0.8,
+      "added_at": "2026-06-08T12:57:14.173942",
+      "last_checked": null,
+      "last_alert": null
+    }
+  ]
+}

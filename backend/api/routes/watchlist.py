@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException
-from shared.schemas import WatchlistEntry, WatchlistAddRequest
+from shared.schemas import WatchlistEntry, WatchlistAddRequest, EntityFingerprint
 from shared.logger import get_logger
 from fabric.client import get_fabric_client
 import uuid
 from datetime import datetime
+from agents.resurface.scheduler import start_watchlist_polling, get_scheduler
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 logger = get_logger(__name__)
@@ -23,8 +24,9 @@ async def add_to_watchlist(request: WatchlistAddRequest):
             return {"message": "Already on watchlist", "entity_id": entity["entity_id"]}
             
     # Add new
+    entity_id = str(uuid.uuid4())
     new_entry = {
-        "entity_id": str(uuid.uuid4()),
+        "entity_id": entity_id,
         "canonical_name": request.canonical_name,
         "aliases": request.aliases or [],
         "jurisdictions": request.jurisdictions or [],
@@ -42,7 +44,26 @@ async def add_to_watchlist(request: WatchlistAddRequest):
     success = await client.write_to_lakehouse(WATCHLIST_TABLE, watchlist)
     
     if success:
-        return {"message": "Added to watchlist", "entity_id": new_entry["entity_id"]}
+        fingerprint = EntityFingerprint(
+            entity_id=entity_id,
+            canonical_name=request.canonical_name,
+            aliases=request.aliases or [],
+            jurisdictions=request.jurisdictions or [],
+            directors=request.directors or []
+        )
+        
+        # Ensure scheduler is running
+        scheduler = get_scheduler()
+        if not scheduler or not scheduler.running:
+            await start_watchlist_polling(interval_minutes=30)
+            
+        # FOR TESTING: Run the engine immediately so you can see the alert without waiting 30 minutes
+        from agents.resurface.agent import ResurfaceAlertEngine
+        import asyncio
+        asyncio.create_task(ResurfaceAlertEngine().run(fingerprint, request.confidence_threshold))
+            
+        return {"message": "Added to watchlist", "entity_id": entity_id}
+        
     raise HTTPException(status_code=500, detail="Failed to write to Fabric Lakehouse")
 
 @router.get("", response_model=list[WatchlistEntry])
