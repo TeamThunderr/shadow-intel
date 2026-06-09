@@ -12,11 +12,11 @@ def validate_python_syntax(filepath: str) -> tuple[bool, str]:
     try:
         with open(filepath, 'r') as f:
             ast.parse(f.read())
-        return True, f"✓ {Path(filepath).name}: Syntax OK"
+        return True, f"  [OK] {Path(filepath).name}: Syntax OK"
     except SyntaxError as e:
-        return False, f"✗ {Path(filepath).name}: Syntax Error - {e}"
+        return False, f"  [FAIL] {Path(filepath).name}: Syntax Error - {e}"
     except Exception as e:
-        return False, f"✗ {Path(filepath).name}: {e}"
+        return False, f"  [FAIL] {Path(filepath).name}: {e}"
 
 
 def check_file_structure(base_path: str) -> dict:
@@ -87,19 +87,19 @@ def main():
     print("="*70)
     
     # Check file structure
-    print("\n📁 File Structure Check:")
+    print("\n[DIR] File Structure Check:")
     print("-" * 70)
     files = check_file_structure(str(base_path))
     all_exist = all(files.values())
     
     for filename, exists in files.items():
-        status = "✓" if exists else "✗"
+        status = "[OK]" if exists else "[FAIL]"
         print(f"  {status} {filename}")
     
-    print(f"\n  Result: {'✓ All files present' if all_exist else '✗ Missing files'}")
+    print(f"\n  Result: {'[OK] All files present' if all_exist else '[FAIL] Missing files'}")
     
     # Check syntax
-    print("\n🔍 Syntax Validation:")
+    print("\n[SYNTAX] Syntax Validation:")
     print("-" * 70)
     
     python_files = [
@@ -120,10 +120,10 @@ def main():
             print(f"  {msg}")
     
     all_valid = all(syntax_results)
-    print(f"\n  Result: {'✓ All files valid' if all_valid else '✗ Syntax errors'}")
+    print(f"\n  Result: {'[OK] All files valid' if all_valid else '[FAIL] Syntax errors'}")
     
     # Check implementations
-    print("\n📋 Implementation Coverage:")
+    print("\n[CLASS] Implementation Coverage:")
     print("-" * 70)
     
     implementations = {
@@ -171,7 +171,7 @@ def main():
                 total_classes += 1
                 found = expected in classes
                 found_classes += found
-                status = "✓" if found else "✗"
+                status = "[OK]" if found else "[FAIL]"
                 print(f"    {status} {expected}")
     
     print(f"\n  Result: {found_classes}/{total_classes} classes found")
@@ -188,18 +188,18 @@ def main():
     }
     
     for check, passed in checks.items():
-        status = "✓ PASS" if passed else "✗ FAIL"
+        status = "[PASS]" if passed else "[FAIL]"
         print(f"  {status}: {check}")
     
     all_passed = all(checks.values())
     
     print("\n" + "="*70)
     if all_passed:
-        print("✓ VALIDATION SUCCESSFUL - Implementation Ready")
+        print("[PASS] VALIDATION SUCCESSFUL - Implementation Ready")
         print("="*70)
         return 0
     else:
-        print("✗ VALIDATION FAILED - Review errors above")
+        print("[FAIL] VALIDATION FAILED - Review errors above")
         print("="*70)
         return 1
 

@@ -197,7 +197,7 @@ class OwnershipUnwindAgent(BaseAgent):
         builder = OwnershipGraphBuilder()
         
         if not use_real_data or not entity_name:
-            return create_mock_ownership_graph()
+            return builder
         
         # Real data from multiple sources
         try:
@@ -235,12 +235,13 @@ class OwnershipUnwindAgent(BaseAgent):
                 )
                 return builder
             else:
-                self.logger.warning("No real data found, falling back to mock data")
-                return create_mock_ownership_graph()
+                self.logger.warning("No real data found, returning empty graph")
+                return builder
                 
         except Exception as e:
-            self.logger.error(f"Error building graph from real data: {e}, using mock data")
-            return create_mock_ownership_graph()
+            self.logger.error(f"Error building graph from real data: {e}, returning empty graph")
+            return builder
+
     
     async def _process_companies_house_result(
         self,
