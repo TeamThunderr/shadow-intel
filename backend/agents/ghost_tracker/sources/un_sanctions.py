@@ -90,7 +90,35 @@ async def _ensure_cache():
 
 
 async def query_un_sanctions(name: str) -> list[dict]:
-    """Search UN Consolidated Sanctions list for fuzzy name matches."""
+    """
+    Search the UN Consolidated Sanctions list for fuzzy name matches.
+
+    Fast-path: tries the local parquet snapshot first (instant, no network).
+    Falls back to downloading the UN XML only when the parquet returns nothing.
+    """
+    # ── Fast-path: local parquet ───────────────────────────────────────────────
+    try:
+        from shared.data_loader import search_un_sanctions as _local_search
+        local_hits = _local_search(name, threshold=FUZZY_THRESHOLD / 100.0)
+        if local_hits:
+            logger.info(f"UN Sanctions (local parquet): {len(local_hits)} matches for '{name}'")
+            return [
+                {
+                    "id":          h["data"].get("id", ""),
+                    "name":        h["name"],
+                    "matched_name": h["name"],
+                    "type":        h["data"].get("type", ""),
+                    "aliases":     [],
+                    "list_type":   "UN Consolidated",
+                    "confidence":  h["confidence"],
+                    "source":      "UN Security Council",
+                }
+                for h in local_hits
+            ]
+    except Exception as exc:
+        logger.warning(f"UN Sanctions local fast-path failed, falling back to XML: {exc}")
+
+    # ── Fallback: download UN XML ─────────────────────────────────────────────
     await _ensure_cache()
     entries = _cache["entries"]
     if not entries:
@@ -110,16 +138,16 @@ async def query_un_sanctions(name: str) -> list[dict]:
 
         if best_score >= FUZZY_THRESHOLD:
             results.append({
-                "id": entry["id"],
-                "name": entry["name"],
+                "id":          entry["id"],
+                "name":        entry["name"],
                 "matched_name": best_matched,
-                "type": entry["type"],
-                "aliases": entry["aliases"],
-                "list_type": "UN Consolidated",
-                "confidence": round(best_score / 100, 3),
-                "source": "UN Security Council",
+                "type":        entry["type"],
+                "aliases":     entry["aliases"],
+                "list_type":   "UN Consolidated",
+                "confidence":  round(best_score / 100, 3),
+                "source":      "UN Security Council",
             })
 
     results.sort(key=lambda x: x["confidence"], reverse=True)
-    logger.info(f"UN Sanctions: {len(results)} matches for '{name}'")
+    logger.info(f"UN Sanctions (XML): {len(results)} matches for '{name}'")
     return results[:10]

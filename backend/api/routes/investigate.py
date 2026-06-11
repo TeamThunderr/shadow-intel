@@ -4,6 +4,7 @@ Manages the full Shadow Intel investigation pipeline:
   POST /investigate              → start (returns immediately, runs in background)
   GET  /investigate/{id}/status  → real-time agent-level progress
   GET  /investigate/{id}         → completed InvestigationReport (JSON)
+  GET  /investigate/test-foundry → quick Foundry IQ connectivity test
   GET  /investigate/{id}/report/markdown → download as .md file
 """
 
@@ -14,14 +15,14 @@ from fastapi.responses import Response
 
 from shared.schemas import (
     InvestigateRequest, InvestigationReport,
-    InvestigationStatus, AgentStatus,
+    InvestigationStatus, AgentStatus, RiskLevel,
 )
 from shared.session import store
 from shared.logger import get_logger
 
 from agents.ghost_tracker.agent import GhostEntityTracker
 from agents.ghost_tracker.fingerprint import build_fingerprint
-from agents.money_trail import run_money_trail
+from agents.money_trail.agent import MoneyTrailAgent
 from agents.ownership_unwind.agent import OwnershipUnwindAgent
 from agents.dark_signal.agent import DarkSignalMonitor
 from agents.resurface.agent import ResurfaceAlertEngine
@@ -33,12 +34,27 @@ from orchestrator.report_builder import build_report
 router = APIRouter(prefix="/investigate", tags=["investigate"])
 logger = get_logger(__name__)
 
-# Singleton — initialised once at import time, reused across every request.
-# Lazy Azure client init means this is safe even without credentials in .env.
+# Singleton — lazily initialises the Azure client; safe without credentials.
 _foundry = FoundryOrchestrator()
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
+
+@router.get("/test-foundry")
+async def test_foundry():
+    """Quick connectivity test for the Foundry IQ (Azure AI) integration."""
+    try:
+        result = await _foundry.generate_narrative(
+            entity_name="Test Entity",
+            risk_level=RiskLevel.low,
+            unified_confidence=0.1,
+            evidence=[],
+            source_breakdown={},
+        )
+        return {"status": "ok", "preview": result[:200]}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
 
 @router.post("", response_model=dict, status_code=202)
 async def start_investigation(
@@ -145,9 +161,8 @@ async def _run_investigation(entity_id: str) -> None:
     2. Money Trail + Ownership Unwind + Dark Signal + Resurface  (parallel)
     3. Merge → Foundry IQ narrative → Build & store report
 
-    The ``return_exceptions=True`` flag in asyncio.gather() means a single
-    agent failure never kills the whole pipeline. Exceptions are normalised
-    to ``None`` before being passed to the merger.
+    ``return_exceptions=True`` in asyncio.gather() means a single
+    agent failure never kills the whole pipeline.
     """
     session = await store.get(entity_id)
     if not session:
@@ -158,15 +173,14 @@ async def _run_investigation(entity_id: str) -> None:
     status = session.status
 
     try:
-        # ── Step 1: Ghost Entity Tracker ──────────────────────────────────
+        # ── Step 1: Ghost Entity Tracker ──────────────────────────────────────
         logger.info(f"[{entity_id}] Step 1: Ghost Entity Tracker")
         status.agents.ghost_tracker = AgentStatus.running
 
         ghost = await GhostEntityTracker().execute(fingerprint)
         status.agents.ghost_tracker = AgentStatus.complete
 
-        # Ghost Tracker enriches the shared fingerprint — propagate the
-        # enriched version to all downstream agents.
+        # Propagate the enriched fingerprint to all downstream agents
         if ghost.data.get("fingerprint"):
             from shared.schemas import EntityFingerprint as FP
             enriched_fp = FP(**ghost.data["fingerprint"])
@@ -180,21 +194,15 @@ async def _run_investigation(entity_id: str) -> None:
             f"sanctions_hit={ghost.data.get('sanctions_hit', False)}"
         )
 
-        # ── Step 2: Parallel agents ────────────────────────────────────────
+        # ── Step 2: Parallel agents ───────────────────────────────────────────
         logger.info(f"[{entity_id}] Step 2: running 4 agents in parallel")
         status.agents.money_trail      = AgentStatus.running
         status.agents.ownership_unwind = AgentStatus.running
         status.agents.dark_signal      = AgentStatus.running
         status.agents.resurface_engine = AgentStatus.running
 
-        # Wrapper to return AgentResponse from dict
-        async def _run_money_trail_wrapped(fp):
-            res_dict = await run_money_trail(fp.model_dump() if hasattr(fp, "model_dump") else fp.dict())
-            from shared.schemas import AgentResponse
-            return AgentResponse(**res_dict)
-
         money_r, ownership_r, signal_r, resurface_r = await asyncio.gather(
-            _run_money_trail_wrapped(fingerprint),
+            MoneyTrailAgent().execute(fingerprint),
             OwnershipUnwindAgent().execute(fingerprint),
             DarkSignalMonitor().execute(fingerprint),
             ResurfaceAlertEngine().execute(fingerprint),
@@ -202,12 +210,12 @@ async def _run_investigation(entity_id: str) -> None:
         )
 
         # Normalise exceptions → None so the merger handles them gracefully
-        money =     money_r     if not isinstance(money_r,     Exception) else None
+        money     = money_r     if not isinstance(money_r,     Exception) else None
         ownership = ownership_r if not isinstance(ownership_r, Exception) else None
-        signal =    signal_r    if not isinstance(signal_r,    Exception) else None
+        signal    = signal_r    if not isinstance(signal_r,    Exception) else None
         resurface = resurface_r if not isinstance(resurface_r, Exception) else None
 
-        # Log any exceptions that occurred
+        # Log any agent-level exceptions
         for name, result in [
             ("money_trail",      money_r),
             ("ownership_unwind", ownership_r),
@@ -224,7 +232,7 @@ async def _run_investigation(entity_id: str) -> None:
 
         logger.info(f"[{entity_id}] Parallel agents complete")
 
-        # ── Step 3: Foundry IQ Orchestration ──────────────────────────────
+        # ── Step 3: Foundry IQ Orchestration ─────────────────────────────────
         logger.info(f"[{entity_id}] Step 3: Foundry IQ Orchestrator")
         status.agents.orchestrator = AgentStatus.running
 

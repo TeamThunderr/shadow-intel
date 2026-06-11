@@ -18,20 +18,52 @@ FUZZY_THRESHOLD = 0.75  # 0.0-1.0 scale
 async def query_opensanctions(name: str, settings) -> list[dict]:
     """
     Use OpenSanctions /match endpoint for entity matching.
-    Falls back to /search if match endpoint fails.
+
+    Fast-path: tries the local parquet snapshot first (instant).
+    Also hits the live API for fresh/supplementary results when an API key is present.
+    Merges and deduplicates both result sets.
     """
+    # ── Fast-path: local parquet ───────────────────────────────────────────────
+    local_results: list[dict] = []
+    try:
+        from shared.data_loader import search_opensanctions as _local_search
+        local_hits = _local_search(name, threshold=FUZZY_THRESHOLD)
+        for h in local_hits:
+            local_results.append({
+                "id":                None,
+                "name":              h["name"],
+                "aliases":           [],
+                "countries":         [],
+                "sanctions_topics":  [],
+                "datasets":          [],
+                "score":             h["confidence"],
+                "confidence":        h["confidence"],
+                "source":            "OpenSanctions",
+                "url":               None,
+            })
+        if local_results:
+            logger.info(f"OpenSanctions (local): {len(local_results)} matches for '{name}'")
+    except Exception as exc:
+        logger.warning(f"OpenSanctions local fast-path failed: {exc}")
+
+    # ── Live API (when API key is available) ───────────────────────────────────
     if not settings.opensanctions_api_key:
-        logger.warning("No OpenSanctions API key — trying public endpoint")
+        logger.info("No OpenSanctions API key — using local results only")
+        return local_results
 
-    headers = {}
-    if settings.opensanctions_api_key:
-        headers["Authorization"] = f"ApiKey {settings.opensanctions_api_key}"
+    headers = {"Authorization": f"ApiKey {settings.opensanctions_api_key}"}
+    api_results = await _match_entity(name, headers)
+    if not api_results:
+        api_results = await _search_entity(name, headers)
 
-    results = await _match_entity(name, headers)
-    if not results:
-        results = await _search_entity(name, headers)
+    # Merge: prefer API results, supplement with local for any names not covered
+    api_names = {r["name"].upper() for r in api_results}
+    for lr in local_results:
+        if lr["name"].upper() not in api_names:
+            api_results.append(lr)
 
-    return results
+    api_results.sort(key=lambda x: x["confidence"], reverse=True)
+    return api_results[:10]
 
 
 async def _match_entity(name: str, headers: dict) -> list[dict]:
