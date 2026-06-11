@@ -1,85 +1,48 @@
-import { useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Activity, Clock } from 'lucide-react'
 
-const MODULE_COLORS = {
-  ghost_tracker: '#3b82f6',
-  money_trail: '#8b5cf6',
-  ownership_unwind: '#6366f1',
-  dark_signal: '#ec4899',
-  resurface_engine: '#f59e0b',
-}
+export default function EvidenceFeed({ report }) {
+  const allEvidence = [
+    ...(report?.ghost_tracker?.evidence   || []),
+    ...(report?.money_trail?.evidence     || []),
+    ...(report?.ownership_unwind?.evidence || []),
+    ...(report?.dark_signal?.evidence     || []),
+    ...(report?.resurface_watch?.evidence || []),
+  ].sort((a, b) => b.confidence - a.confidence)
 
-const MODULE_ICONS = {
-  ghost_tracker: '👻',
-  money_trail: '💸',
-  ownership_unwind: '🕸️',
-  dark_signal: '📡',
-  resurface_engine: '🔔',
-}
-
-export default function EvidenceFeed({ chain = [] }) {
-  const containerRef = useRef(null)
-
-  useEffect(() => {
-    // If newest first is at top, we don't strictly need to scroll to bottom,
-    // but just in case, we can ensure the top is visible.
-    if (containerRef.current) {
-      containerRef.current.scrollTop = 0
-    }
-  }, [chain])
-
-  if (!chain.length) {
-    return (
-      <div style={{ color: '#475569', fontSize: '0.875rem', textAlign: 'center', padding: '2rem 0' }}>
-        No evidence collected yet
-      </div>
-    )
-  }
-
-  // Sort newest first (highest step number)
-  const sortedChain = [...chain].sort((a, b) => b.step - a.step)
+  if (allEvidence.length === 0) return null
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: 360, overflowY: 'auto', paddingRight: '0.5rem' }}>
-      <AnimatePresence initial={false}>
-        {sortedChain.map((step) => {
-          const color = MODULE_COLORS[step.source_module] || '#64748b'
-          const icon = MODULE_ICONS[step.source_module] || '📋'
+    <div className="card" style={{ padding: '1.25rem' }}>
+      <div className="section-label" style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Activity size={14} /> Full Evidence Feed ({allEvidence.length} items)
+      </div>
 
-          return (
-            <motion.div
-              key={step.step}
-              initial={{ opacity: 0, y: -20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              style={{
-                padding: '0.875rem 1rem',
-                background: 'rgba(0,0,0,0.25)',
-                borderRadius: 8,
-                borderLeft: `3px solid ${color}`,
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.4rem' }}>
-                <span style={{ fontSize: '0.85rem' }}>{icon}</span>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Step {step.step} — {step.source_module.replace('_', ' ')}
-                </span>
-                <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: '#475569' }}>
-                  {(step.confidence * 100).toFixed(0)}% confidence
-                </span>
-              </div>
-              <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '0.3rem', lineHeight: 1.5 }}>
-                {step.finding}
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#475569' }}>
-                Sources: {step.sources?.join(', ') || '—'}
-              </div>
-            </motion.div>
-          )
-        })}
-      </AnimatePresence>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.85rem' }}>
+        {allEvidence.map((ev, i) => (
+          <div key={i} style={{
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)', padding: '12px 14px',
+            display: 'flex', flexDirection: 'column', gap: 8
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span className="source-badge" style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
+                {ev.source}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                {(ev.confidence * 100).toFixed(0)}%
+              </span>
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+              {ev.detail}
+            </div>
+            {ev.url && (
+              <a href={ev.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.75rem', fontWeight: 500, marginTop: 'auto' }}>
+                View source
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

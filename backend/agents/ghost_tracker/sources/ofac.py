@@ -89,9 +89,34 @@ async def _ensure_cache():
 
 async def query_ofac(name: str) -> list[dict]:
     """
-    Search the cached OFAC SDN list for fuzzy name matches.
-    Returns a list of match dicts with confidence scores.
+    Search the OFAC SDN list for fuzzy name matches.
+
+    Fast-path: tries the local parquet snapshot first (instant, no network).
+    Falls back to downloading the OFAC XML only when the parquet returns nothing.
     """
+    # ── Fast-path: local parquet ───────────────────────────────────────────────
+    try:
+        from shared.data_loader import search_ofac as _local_search
+        local_hits = _local_search(name, threshold=FUZZY_THRESHOLD / 100.0)
+        if local_hits:
+            logger.info(f"OFAC (local parquet): {len(local_hits)} matches for '{name}'")
+            return [
+                {
+                    "uid":          h["data"].get("uid", ""),
+                    "name":         h["name"],
+                    "matched_name": h["name"],
+                    "aliases":      [],
+                    "type":         h["data"].get("sdn_type", h["data"].get("sdnType", "")),
+                    "programs":     [],
+                    "confidence":   h["confidence"],
+                    "source":       "OFAC SDN",
+                }
+                for h in local_hits
+            ]
+    except Exception as exc:
+        logger.warning(f"OFAC local fast-path failed, falling back to XML: {exc}")
+
+    # ── Fallback: download OFAC XML ───────────────────────────────────────────
     await _ensure_cache()
     entries = _cache["entries"]
     if not entries:
@@ -102,7 +127,6 @@ async def query_ofac(name: str) -> list[dict]:
     name_upper = name.upper()
 
     for entry in entries:
-        # Check all names (primary + aliases)
         best_score = 0
         best_matched_name = ""
         for candidate in entry["all_names"]:
@@ -113,17 +137,16 @@ async def query_ofac(name: str) -> list[dict]:
 
         if best_score >= FUZZY_THRESHOLD:
             results.append({
-                "uid": entry["uid"],
-                "name": entry["name"],
+                "uid":          entry["uid"],
+                "name":         entry["name"],
                 "matched_name": best_matched_name,
-                "aliases": entry["aliases"],
-                "type": entry["type"],
-                "programs": entry["programs"],
-                "confidence": round(best_score / 100, 3),
-                "source": "OFAC SDN",
+                "aliases":      entry["aliases"],
+                "type":         entry["type"],
+                "programs":     entry["programs"],
+                "confidence":   round(best_score / 100, 3),
+                "source":       "OFAC SDN",
             })
 
-    # Sort by confidence descending
     results.sort(key=lambda x: x["confidence"], reverse=True)
-    logger.info(f"OFAC: {len(results)} matches for '{name}'")
-    return results[:10]  # return top 10
+    logger.info(f"OFAC (XML): {len(results)} matches for '{name}'")
+    return results[:10]

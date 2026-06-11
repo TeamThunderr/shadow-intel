@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     # Azure Foundry
     azure_foundry_endpoint: str = ""
     azure_foundry_api_key: str = ""
-    azure_foundry_deployment: str = "gpt-4o"
+    azure_foundry_deployment: str = "gpt-4.1-mini"
 
     # Fabric
     fabric_workspace_id: str = ""

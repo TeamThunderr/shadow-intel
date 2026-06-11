@@ -227,20 +227,144 @@ class OwnershipUnwindAgent(BaseAgent):
             except Exception as oo_err:
                 self.logger.warning(f"Optional OpenOwnership source failed: {oo_err}. Continuing.")
             
-            # Return graph even if partial
+        # Return graph even if partial
             if builder.get_node_count() > 0:
                 self.logger.info(
                     f"Built ownership graph with {builder.get_node_count()} entities "
                     f"and {builder.get_edge_count()} relationships"
                 )
                 return builder
+
+            # ── Fallback: local parquet (GLEIF + ICIJ) for non-UK/non-US entities ──
+            self.logger.info(
+                f"No Companies House / EDGAR data found for '{entity_name}' — "
+                "trying local GLEIF + ICIJ parquet fallback"
+            )
+            await self._build_from_local_parquet(builder, entity_name)
+
+            if builder.get_node_count() > 0:
+                self.logger.info(
+                    f"Local parquet fallback returned {builder.get_node_count()} entities"
+                )
             else:
-                self.logger.warning("No real data found, returning empty graph")
-                return builder
-                
+                self.logger.warning("No ownership data found in any source")
+
+            return builder
+
         except Exception as e:
             self.logger.error(f"Error building graph from real data: {e}, returning empty graph")
             return builder
+
+    async def _build_from_local_parquet(
+        self,
+        builder: "OwnershipGraphBuilder",
+        entity_name: str,
+    ) -> None:
+        """
+        Populate the graph with data from local GLEIF + ICIJ parquets.
+        Used as a fallback when Companies House and SEC EDGAR return nothing.
+        """
+        from shared.data_loader import _gleif_df, search_icij
+
+        # ── GLEIF (Legal Entity Identifiers) ──────────────────────────────────
+        if _gleif_df is not None:
+            from rapidfuzz import fuzz
+            name_col = next(
+                (c for c in _gleif_df.columns if "name" in c.lower()),
+                None,
+            )
+            parent_col = next(
+                (c for c in _gleif_df.columns
+                 if "parent" in c.lower() or "ultimate" in c.lower()),
+                None,
+            )
+            country_col = next(
+                (c for c in _gleif_df.columns
+                 if "country" in c.lower() or "jurisdiction" in c.lower()),
+                None,
+            )
+
+            if name_col:
+                name_upper = entity_name.upper()
+                added_nodes: set[str] = set()
+                root_id: str | None = None
+
+                for _, row in _gleif_df.head(100_000).iterrows():
+                    candidate = str(row.get(name_col, "")).upper()
+                    if not candidate:
+                        continue
+                    score = fuzz.token_sort_ratio(name_upper, candidate)
+                    if score < 72:
+                        continue
+
+                    node_id = f"gleif_{str(row.get('LEI', candidate))[:16]}"
+                    country = str(row.get(country_col, "")) if country_col else ""
+
+                    if node_id not in added_nodes:
+                        builder.add_entity(OwnershipEntity(
+                            entity_id=node_id,
+                            name=str(row.get(name_col, candidate)),
+                            type=EntityType.company,
+                            jurisdiction=country or None,
+                            source_system="GLEIF",
+                            source_reference=f"LEI: {str(row.get('LEI', ''))}",
+                        ))
+                        added_nodes.add(node_id)
+                        if root_id is None:
+                            root_id = node_id
+
+                        # Evidence
+                        builder.add_evidence(EvidenceItem(
+                            source="GLEIF",
+                            type="ownership_relationship",
+                            detail=f"Legal entity '{str(row.get(name_col, candidate))}' registered in {country or 'Unknown'}",
+                            url=f"https://search.gleif.org/#/record/{row.get('LEI', '')}",
+                            confidence=round(score / 100, 2),
+                        ))
+
+                    # If there's a parent column, add a parent node + link
+                    if parent_col and root_id:
+                        parent_name = str(row.get(parent_col, ""))
+                        if parent_name and parent_name.upper() not in ("", "NAN", "NONE"):
+                            parent_id = f"gleif_parent_{parent_name[:20].replace(' ', '_')}"
+                            if parent_id not in added_nodes:
+                                builder.add_entity(OwnershipEntity(
+                                    entity_id=parent_id,
+                                    name=parent_name,
+                                    type=EntityType.company,
+                                    jurisdiction=country or None,
+                                    source_system="GLEIF",
+                                ))
+                                added_nodes.add(parent_id)
+                            builder.add_ownership_link(OwnershipLink(
+                                from_entity_id=parent_id,
+                                to_entity_id=node_id,
+                                ownership_percentage=0.0,
+                                link_type="ownership",
+                                source="gleif",
+                                source_system="GLEIF",
+                            ))
+
+        # ── ICIJ Offshore Leaks ────────────────────────────────────────────────
+        icij_hits = search_icij(entity_name, threshold=0.70)
+        for hit in icij_hits[:5]:
+            node_id = f"icij_{hit.get('node_id', hit['name'][:16].replace(' ', '_'))}"
+            country = hit.get("countries", "")
+            builder.add_entity(OwnershipEntity(
+                entity_id=node_id,
+                name=hit["name"],
+                type=EntityType.company,
+                jurisdiction=country or None,
+                source_system="ICIJ Offshore Leaks",
+                source_reference=f"Dataset: {hit.get('dataset', 'N/A')}",
+            ))
+            builder.add_evidence(EvidenceItem(
+                source="ICIJ",
+                type="ownership_relationship",
+                detail=f"'{hit['name']}' found in ICIJ Offshore Leaks — {hit.get('dataset', 'N/A')}",
+                url=hit.get("url"),
+                confidence=hit["confidence"],
+            ))
 
     
     async def _process_companies_house_result(

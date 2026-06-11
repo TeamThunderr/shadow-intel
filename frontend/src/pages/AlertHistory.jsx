@@ -44,10 +44,10 @@ const MOCK_ALERTS = [
 ]
 
 const RISK_COLORS = {
-  critical: '#f87171',
-  high: '#fbbf24',
-  medium: '#60a5fa',
-  low: '#34d399',
+  critical: 'var(--risk-critical)',
+  high:     'var(--risk-high)',
+  medium:   'var(--risk-medium)',
+  low:      'var(--risk-low)',
 }
 
 export default function AlertHistory() {
@@ -88,28 +88,28 @@ export default function AlertHistory() {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem' }}>
       <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '0.5rem' }}>
+        <h1 style={{ fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
           Alert History
         </h1>
-        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
           Resurface events fired by the Resurface Engine. Delivered via Microsoft Teams and Outlook.
         </p>
       </div>
 
       {/* Filters */}
       <div className="glass-card" style={{ padding: '1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 240, borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '1.5rem' }}>
-          <Search size={18} color="#64748b" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 240, borderRight: '1px solid var(--border)', paddingRight: '1.5rem' }}>
+          <Search size={18} color="var(--text-muted)" />
           <input
             placeholder="Search entity or event…"
             value={searchQuery}
             onChange={e => { setSearchQuery(e.target.value); setPage(1) }}
-            style={{ background: 'transparent', border: 'none', color: '#e2e8f0', outline: 'none', width: '100%' }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none', width: '100%', fontSize: '0.88rem' }}
           />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <Filter size={16} color="#64748b" />
+          <Filter size={16} color="var(--text-muted)" />
           <select 
             className="input-field" 
             style={{ padding: '6px 10px', width: 140 }}
@@ -123,7 +123,7 @@ export default function AlertHistory() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <Calendar size={16} color="#64748b" />
+          <Calendar size={16} color="var(--text-muted)" />
           <select 
             className="input-field" 
             style={{ padding: '6px 10px', width: 120 }}
@@ -140,7 +140,7 @@ export default function AlertHistory() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {paginatedAlerts.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>No alerts match your filters.</div>
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No alerts match your filters.</div>
         ) : (
           paginatedAlerts.map((alert) => (
             <div key={alert.alert_id} className="glass-card animate-slide-up" style={{ padding: '0' }}>
@@ -168,19 +168,19 @@ export default function AlertHistory() {
               </div>
 
               {/* Event details row */}
-              <div style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.1)' }}>
-                <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <strong style={{ color: '#cbd5e1' }}>Trigger Event:</strong> {alert.match_event} 
-                  <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>{alert.jurisdiction}</span>
+              <div style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.12)' }}>
+                <div style={{ fontSize: '0.87rem', color: 'var(--text-secondary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Trigger Event:</strong> {alert.match_event}
+                  <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.07)', padding: '2px 6px', borderRadius: 4, color: 'var(--text-secondary)' }}>{alert.jurisdiction}</span>
                 </div>
 
                 {alert.top_evidence.length > 0 && (
                   <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>
                       Key Evidence
                     </div>
                     {alert.top_evidence.map((e, i) => (
-                      <div key={i} style={{ fontSize: '0.82rem', color: '#64748b', paddingLeft: '0.75rem', borderLeft: '2px solid rgba(59,130,246,0.3)', marginBottom: '0.25rem' }}>
+                      <div key={i} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', paddingLeft: '0.75rem', borderLeft: '2px solid rgba(77,127,255,0.35)', marginBottom: '0.25rem' }}>
                         {e}
                       </div>
                     ))}

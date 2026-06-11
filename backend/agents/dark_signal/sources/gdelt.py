@@ -125,52 +125,63 @@ async def search_gdelt(name: str, days: int = 30) -> list[dict]:
 
     articles = result.get("articles", [])
     news_items = []
-    
-    # Calculate match confidence for GDELT based on name match
+
     from rapidfuzz import fuzz
     from fabric.pipeline import normalize_entity_name
     q_norm = normalize_entity_name(name)
-    
+
     for article in articles:
         try:
-            title = article.get("title", "")
-            domain = article.get("domain", "")
+            title   = article.get("title", "")
+            domain  = article.get("domain", "")
             url_val = article.get("url", "")
             date_str = article.get("seendate", "")
-            lang = article.get("language", "English")
-            
-            # Parse tone
+            lang    = article.get("language", "English")
+
+            # ── Language filter: English only ──────────────────────────────
+            if lang.lower() not in ("english", "en"):
+                continue
+
             tone_val = article.get("tone", 0.0)
             try:
                 tone = float(tone_val)
             except Exception:
                 tone = 0.0
-                
+
             published_date = parse_gdelt_date(date_str)
-            
-            # Entity matching confidence
-            # Use fuzz match on title to see if query is mentioned in title
-            # If so, high confidence (e.g. 0.90), otherwise default to 0.70
+
+            # Confidence based on title match
             confidence = 0.70
-            if q_norm:
-                title_norm = title.lower()
-                if q_norm.lower() in title_norm:
-                    confidence = 0.90
-                    
+            if q_norm and q_norm.lower() in title.lower():
+                confidence = 0.88
+
+            # Human-readable summary
+            date_label = published_date.strftime("%b %d %Y") if published_date else "recent"
+            sentiment  = "negative" if tone < -1 else "positive" if tone > 1 else "neutral"
+            summary    = (
+                f"{title}. "
+                f"Reported by {domain} on {date_label}. "
+                f"Sentiment: {sentiment}."
+            )
+
             news_items.append({
-                "source": domain or "GDELT",
-                "title": title,
-                "url": url_val,
-                "entity": name,
-                "country": "unknown",
-                "summary": f"GDELT News. Domain: {domain}. Language: {lang}. Tone: {tone}.",
-                "confidence": confidence,
+                "source":         domain or "GDELT",
+                "title":          title,
+                "url":            url_val,
+                "entity":         name,
+                "country":        "unknown",
+                "summary":        summary,
+                "confidence":     confidence,
                 "published_date": published_date,
-                "language": lang,
-                "tone": tone
+                "language":       lang,
+                "tone":           tone,
             })
         except Exception as pe:
             logger.warning(f"Error parsing GDELT article item: {pe}")
 
-    logger.info(f"GDELT returned {len(news_items)} articles for: {name}")
+    # Keep only top 8 highest-confidence English items
+    news_items.sort(key=lambda x: x["confidence"], reverse=True)
+    news_items = news_items[:8]
+
+    logger.info(f"GDELT returned {len(news_items)} English articles for: {name}")
     return news_items
